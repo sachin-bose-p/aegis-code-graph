@@ -126,20 +126,52 @@ def compile_react_flow(graph: ArchitectureGraph) -> dict[str, Any]:
         for nid in group.node_ids:
             node_to_group.setdefault(nid, group.id)
 
+    # Compute intra-layer topological depth so parent nodes sit above child nodes
+    # instead of flattening 10 same-layer nodes into a single wide horizontal strip.
     layer_row: dict[LayerType, int] = {layer: idx for idx, layer in enumerate(LAYER_ORDER)}
-    layer_col_counts: dict[LayerType, int] = {layer: 0 for layer in LAYER_ORDER}
+    node_layer = {n.id: n.layer for n in graph.nodes}
+    intra_depth: dict[str, int] = {n.id: 0 for n in graph.nodes}
+    for _ in range(len(graph.nodes)):
+        changed = False
+        for edge in graph.edges:
+            if (
+                edge.source in intra_depth
+                and edge.target in intra_depth
+                and node_layer.get(edge.source) == node_layer.get(edge.target)
+                and edge.source != edge.target
+            ):
+                next_d = min(intra_depth[edge.source] + 1, 3)
+                if next_d > intra_depth[edge.target]:
+                    intra_depth[edge.target] = next_d
+                    changed = True
+        if not changed:
+            break
+
+    # Assign (x, y) per (layer, sub_row), wrapping at 4 nodes per row
+    layer_buckets: dict[tuple[int, int], list[GraphNode]] = {}
+    for node in graph.nodes:
+        base_row = layer_row[node.layer]
+        sub_row = intra_depth[node.id]
+        layer_buckets.setdefault((base_row, sub_row), []).append(node)
+
+    positions: dict[str, dict[str, int]] = {}
+    current_y = 0
+    for key in sorted(layer_buckets):
+        bucket = layer_buckets[key]
+        for idx, node in enumerate(bucket):
+            col = idx % 4
+            wrap_row = idx // 4
+            positions[node.id] = {"x": col * 280, "y": current_y + wrap_row * 150}
+        rows_used = max(1, (len(bucket) + 3) // 4)
+        current_y += rows_used * 170
 
     rf_nodes: list[dict[str, Any]] = []
     for node in graph.nodes:
-        col = layer_col_counts[node.layer]
-        layer_col_counts[node.layer] += 1
-        row = layer_row[node.layer]
-
         rf_nodes.append(
             {
                 "id": node.id,
                 "type": "architectureNode",
-                "position": {"x": col * 280, "y": row * 160},
+                "position": positions[node.id],
                 "data": {
                     "label": node.label,
                     "file_path": node.file_path,

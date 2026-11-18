@@ -8,6 +8,7 @@ from typing import Any
 
 from openai import AsyncOpenAI
 
+from aegis_code_graph.micro_extractor import _categorize_package, _extract_package_root, _STDLIB_PREFIXES
 from aegis_code_graph.models import ArchitectureGraph, GraphConfig, RepoContext
 
 _CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?```$", re.DOTALL | re.IGNORECASE)
@@ -89,6 +90,23 @@ def format_context_prompt(context: RepoContext, config: GraphConfig) -> str:
             syms = f" ({', '.join(ve.matched_symbols[:4])})" if ve.matched_symbols else ""
             sections.append(f"- {ve.source_file} -> {ve.target_file}{syms}")
 
+    # Summarize external/SDK packages used across the repo
+    internal_pkgs = {c.package_name for c in context.symbol_cards if c.package_name}
+    ext_pkgs: dict[str, set[str]] = {}
+    for card in context.symbol_cards:
+        for imp in card.imports:
+            pkg = _extract_package_root(imp)
+            if not pkg or any(pkg.startswith(s) for s in _STDLIB_PREFIXES):
+                continue
+            if any(pkg.startswith(ip) for ip in internal_pkgs if ip):
+                continue
+            ext_pkgs.setdefault(pkg, set()).add(card.primary_symbol or card.file_path)
+    if ext_pkgs:
+        sections.append("\n## External Packages Used")
+        for pkg, users in sorted(ext_pkgs.items(), key=lambda kv: (-len(kv[1]), kv[0]))[:12]:
+            cat = _categorize_package(pkg)
+            sections.append(f"- {pkg} ({cat}) <- used by {', '.join(sorted(users)[:4])}")
+
     return "\n".join(sections)
 
 
@@ -107,8 +125,11 @@ def _build_system_prompt(config: GraphConfig) -> str:
         "3. Do NOT turn `data class` DTOs, `enum class`es, or UI helper items (e.g., "
         "Contact, TransactionStatus, DashboardCardItem) into standalone State/Domain nodes — "
         "list them in `state_models` on their owning node instead.\n"
-        "3. Group modules into logical layers using the allowed `layer` values: "
-        '"ui", "state", "domain", "data", "infra", "external".\n'
+        "4. Assign layers accurately so the flow reads top-to-bottom: "
+        '`"ui"` for Activities/Screens/Composables/Widgets, `"state"` for ViewModels/BLoCs/State/Routers, '
+        '`"domain"` for UseCases/Services, `"data"` for Repositories/DAOs/APIClients, '
+        '`"infra"` for Theme/Color/Type/DI/Config, and `"external"` for key external SDKs/libraries '
+        "(include the top 2-4 external packages from External Packages Used).\n"
         "4. Every `node.id` and `group.id` must be alphanumeric snake_case.\n"
         "5. Every `node.file_path` MUST be an exact relative path from the File Tree "
         '(or "" only for external services). Include `symbol_type`, `key_methods`, and `state_models`.\n'
