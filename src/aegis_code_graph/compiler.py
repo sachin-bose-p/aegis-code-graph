@@ -71,14 +71,22 @@ def compile_mermaid(graph: ArchitectureGraph) -> str:
         lines.append(f'    subgraph {group.id}["{title}"]')
         for node in member_nodes:
             label = _escape_mermaid_text(node.label)
-            lines.append(f'        {node.id}["{label}"]')
+            if node.key_methods:
+                methods_preview = ", ".join(_escape_mermaid_text(m.split("(")[0].split()[-1] + "()") for m in node.key_methods[:2])
+                lines.append(f'        {node.id}["{label}<br/><i>{methods_preview}</i>"]')
+            else:
+                lines.append(f'        {node.id}["{label}"]')
             emitted_nodes.add(node.id)
         lines.append("    end")
 
     for node in ungrouped:
         if node.id not in emitted_nodes:
             label = _escape_mermaid_text(node.label)
-            lines.append(f'    {node.id}["{label}"]')
+            if node.key_methods:
+                methods_preview = ", ".join(_escape_mermaid_text(m.split("(")[0].split()[-1] + "()") for m in node.key_methods[:2])
+                lines.append(f'    {node.id}["{label}<br/><i>{methods_preview}</i>"]')
+            else:
+                lines.append(f'    {node.id}["{label}"]')
             emitted_nodes.add(node.id)
 
     if graph.edges:
@@ -136,7 +144,14 @@ def compile_react_flow(graph: ArchitectureGraph) -> dict[str, Any]:
                     "label": node.label,
                     "file_path": node.file_path,
                     "layer": node.layer,
+                    "symbol_type": node.symbol_type,
                     "summary": node.summary,
+                    "key_methods": list(node.key_methods),
+                    "state_models": list(node.state_models),
+                    "loc": node.loc,
+                    "fan_in": node.fan_in,
+                    "fan_out": node.fan_out,
+                    "security_flags": [f.model_dump() for f in node.security_flags],
                     "group_id": node_to_group.get(node.id),
                 },
             }
@@ -144,11 +159,18 @@ def compile_react_flow(graph: ArchitectureGraph) -> dict[str, Any]:
 
     rf_edges: list[dict[str, Any]] = [
         {
-            "id": f"e_{idx}_{edge.source}_{edge.target}",
+            "id": edge.id or f"e_{idx}_{edge.source}_{edge.target}",
             "source": edge.source,
             "target": edge.target,
+            "type": "aegisSemanticEdge",
             "label": edge.relation,
-            "animated": False,
+            "animated": edge.edge_type == "state_stream",
+            "data": {
+                "edge_type": edge.edge_type,
+                "relation": edge.relation,
+                "data_payload": edge.data_payload,
+                "verified": edge.verified,
+            },
         }
         for idx, edge in enumerate(graph.edges)
     ]
@@ -162,10 +184,28 @@ def compile_react_flow(graph: ArchitectureGraph) -> dict[str, Any]:
         for group in groups
     ]
 
+    layer_counts: dict[str, int] = {}
+    sec_count = 0
+    for node in graph.nodes:
+        layer_counts[node.layer] = layer_counts.get(node.layer, 0) + 1
+        sec_count += len(node.security_flags)
+
     return {
         "project_name": graph.project_name,
         "architecture_pattern": graph.architecture_pattern,
         "nodes": rf_nodes,
         "edges": rf_edges,
         "groups": rf_groups,
+        "stats": {
+            "node_count": len(rf_nodes),
+            "edge_count": len(rf_edges),
+            "verified_edges": sum(1 for e in graph.edges if e.verified),
+            "security_finding_count": sec_count,
+            "layers": layer_counts,
+        },
     }
+
+
+# v0.2 convenience aliases
+to_mermaid = compile_mermaid
+to_react_flow_json = compile_react_flow

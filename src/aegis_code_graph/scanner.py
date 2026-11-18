@@ -7,8 +7,10 @@ from pathlib import Path
 
 import pathspec
 
-from aegis_code_graph.ast_extractor import extract_file_symbols, is_supported_source
-from aegis_code_graph.models import FileSymbols, GraphConfig, RepoContext
+from aegis_code_graph.ast_extractor import extract_symbol_card, is_supported_source
+from aegis_code_graph.import_resolver import resolve_imports
+from aegis_code_graph.models import FileSymbolCard, FileSymbols, GraphConfig, RepoContext
+from aegis_code_graph.telemetry import load_security_findings
 
 DEFAULT_IGNORED_DIRS: frozenset[str] = frozenset(
     {
@@ -317,23 +319,29 @@ def scan_repository(
     remaining_budget = max(0, cfg.max_tokens_budget - used_tokens)
     ast_budget = min(cfg.ast_token_budget, remaining_budget)
     ast_map: list[FileSymbols] = []
+    symbol_cards: list[FileSymbolCard] = []
     ast_tokens = 0
 
     for rel_path in _prioritize_source_files(all_files):
-        symbols = extract_file_symbols(root / rel_path, rel_path=rel_path)
-        if symbols is None:
+        card = extract_symbol_card(root / rel_path, rel_path=rel_path)
+        if card is None:
             continue
-        if not symbols.imports and not symbols.classes and not symbols.functions:
+        if not card.imports and not card.classes and not card.functions and not card.methods:
             continue
 
-        serialized = symbols.model_dump_json()
+        serialized = card.model_dump_json()
         tok = estimate_tokens(serialized)
         if ast_tokens + tok > ast_budget:
             break
-        ast_map.append(symbols)
+        ast_map.append(card)
+        symbol_cards.append(card)
         ast_tokens += tok
 
     used_tokens += ast_tokens
+
+    # 4. Deterministic import resolution & optional SARIF security overlay
+    verified_edges = resolve_imports(symbol_cards, all_files)
+    sarif_findings = load_security_findings(cfg.sarif_path, root, all_files)
 
     return RepoContext(
         repo_name=root.name,
@@ -343,5 +351,8 @@ def scan_repository(
         manifests=manifests,
         entrypoints=entrypoints,
         ast_map=ast_map,
+        symbol_cards=symbol_cards,
+        verified_edges=verified_edges,
+        sarif_findings=sarif_findings,
         estimated_tokens=used_tokens,
     )

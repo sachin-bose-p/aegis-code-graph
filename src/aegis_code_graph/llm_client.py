@@ -55,7 +55,20 @@ def format_context_prompt(context: RepoContext, config: GraphConfig) -> str:
         for path, content in context.entrypoints.items():
             sections.append(f"### {path}\n```\n{content}\n```")
 
-    if context.ast_map:
+    if context.symbol_cards:
+        sections.append("\n## AST Symbol Cards")
+        for card in context.symbol_cards:
+            header = f"- {card.file_path} ({card.language}, {card.symbol_type}, {card.loc} LOC) | symbol={card.primary_symbol}"
+            parts = [header]
+            if card.methods:
+                parts.append(f"methods=[{', '.join(card.methods[:5])}]")
+            if card.state_models:
+                parts.append(f"state=[{', '.join(card.state_models[:5])}]")
+            filtered_imports = _filter_high_signal_imports(card.imports)
+            if filtered_imports:
+                parts.append(f"imports=[{', '.join(filtered_imports[:8])}]")
+            sections.append(" | ".join(parts))
+    elif context.ast_map:
         sections.append("\n## AST Symbol & Import Map")
         for sym in context.ast_map:
             parts = [f"- {sym.file_path} ({sym.language})"]
@@ -67,6 +80,12 @@ def format_context_prompt(context: RepoContext, config: GraphConfig) -> str:
             if filtered_imports:
                 parts.append(f"imports=[{', '.join(filtered_imports[:10])}]")
             sections.append(" | ".join(parts))
+
+    if context.verified_edges:
+        sections.append("\n## Verified Import Edges (Deterministic)")
+        for ve in context.verified_edges[:40]:
+            syms = f" ({', '.join(ve.matched_symbols[:4])})" if ve.matched_symbols else ""
+            sections.append(f"- {ve.source_file} -> {ve.target_file}{syms}")
 
     return "\n".join(sections)
 
@@ -81,16 +100,23 @@ def _build_system_prompt(config: GraphConfig) -> str:
         "Rules:\n"
         f"1. Include {config.min_nodes} to {config.max_nodes} core architectural nodes "
         "(fewer only if the repo itself has fewer components).\n"
-        "2. Group modules into logical layers using the allowed `layer` values: "
+        "2. Use REAL class/symbol names from AST Symbol Cards (e.g., ContactViewModel, "
+        "ContactRepository). NEVER invent synthetic umbrella names like 'Management Screens'.\n"
+        "3. Group modules into logical layers using the allowed `layer` values: "
         '"ui", "state", "domain", "data", "infra", "external".\n'
-        "3. Every `node.id` and `group.id` must be alphanumeric snake_case.\n"
-        "4. Every `node.file_path` MUST be an exact relative path from the File Tree "
-        '(or "" only for external services).\n'
-        "5. Do NOT place unit/integration test files (test_*, *_test.*, unittest/) "
+        "4. Every `node.id` and `group.id` must be alphanumeric snake_case.\n"
+        "5. Every `node.file_path` MUST be an exact relative path from the File Tree "
+        '(or "" only for external services). Include `symbol_type`, `key_methods`, and `state_models`.\n'
+        "6. Never write tautological summaries like 'Manages X state' or 'Handles X service'; "
+        "describe concrete data flow and responsibilities.\n"
+        "7. Never use generic 'uses' edges. Use concrete method/stream/route phrases "
+        "(e.g., 'collects uiState', 'queries getAllContacts()') and set `edge_type` to "
+        '"state_stream", "method_call", "data_io", or "navigation".\n'
+        "8. Do NOT place unit/integration test files (test_*, *_test.*, unittest/) "
         "in UI/Domain/Data layers; focus on real application modules, activities, "
         "controllers, and services.\n"
-        "6. Every edge `source` and `target` must reference a defined `node.id`.\n"
-        "7. Respond ONLY with valid JSON matching this schema:\n"
+        "9. Every edge `source` and `target` must reference a defined `node.id`.\n"
+        "10. Respond ONLY with valid JSON matching this schema:\n"
         f"{schema_json}"
     )
 

@@ -61,6 +61,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="LLM request timeout in seconds (default: 300).",
     )
     parser.add_argument(
+        "--sarif",
+        default=None,
+        help="Optional SARIF or Semgrep/MobSF JSON report path for AppSec node overlay.",
+    )
+    parser.add_argument(
         "--scan-only",
         action="store_true",
         help="Only scan the repository and print the extracted RepoContext JSON without calling an LLM.",
@@ -79,6 +84,7 @@ def main(argv: list[str] | None = None) -> int:
         model=args.model,
         max_tokens_budget=args.max_tokens,
         timeout=args.timeout,
+        sarif_path=args.sarif,
     )
 
     if args.scan_only:
