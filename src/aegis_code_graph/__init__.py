@@ -14,9 +14,10 @@ from aegis_code_graph.compiler import (
     to_react_flow_json,
 )
 from aegis_code_graph.llm_client import synthesize_architecture
-from aegis_code_graph.micro_extractor import extract_file_micro_graph
+from aegis_code_graph.micro_extractor import extract_feature_flow, extract_file_micro_graph
 from aegis_code_graph.models import (
     ArchitectureGraph,
+    FeatureFlowGraph,
     FileSymbolCard,
     FileSymbols,
     GraphConfig,
@@ -25,6 +26,7 @@ from aegis_code_graph.models import (
     GraphResult,
     MicroMethodGraph,
     MicroMethodInfo,
+    PackageDependency,
     RepoContext,
     SecurityFlag,
     SubgraphGroup,
@@ -36,6 +38,7 @@ from aegis_code_graph.validator import validate_graph
 
 __all__ = [
     "ArchitectureGraph",
+    "FeatureFlowGraph",
     "FileSymbolCard",
     "FileSymbols",
     "GraphConfig",
@@ -44,6 +47,7 @@ __all__ = [
     "GraphResult",
     "MicroMethodGraph",
     "MicroMethodInfo",
+    "PackageDependency",
     "RepoContext",
     "SecurityFlag",
     "SubgraphGroup",
@@ -52,6 +56,7 @@ __all__ = [
     "compile_mermaid",
     "compile_react_flow",
     "create_graph_router",
+    "extract_feature_flow",
     "extract_file_micro_graph",
     "generate_graph",
     "generate_graph_sync",

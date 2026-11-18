@@ -277,11 +277,19 @@ def _extract_with_tree_sitter(source_bytes: bytes, language: str, rel_path: str)
         if model_name not in state_models:
             state_models.append(model_name)
 
-    primary_symbol = (
-        classes[0]
-        if classes
-        else (functions[0] if functions else Path(rel_path).stem)
-    )
+    stem = Path(rel_path).stem
+    if stem in functions:
+        primary_symbol = stem
+    elif stem in classes:
+        primary_symbol = stem
+    elif classes and classes[0] not in state_models:
+        primary_symbol = classes[0]
+    elif functions:
+        primary_symbol = functions[0]
+    elif classes:
+        primary_symbol = classes[0]
+    else:
+        primary_symbol = stem
     symbol_type = _infer_symbol_type(source_text, primary_symbol, rel_path)
     loc = sum(1 for line in source_text.splitlines() if line.strip())
 
@@ -325,11 +333,19 @@ def _extract_with_regex(source_text: str, language: str, rel_path: str) -> FileS
     functions = list(dict.fromkeys(m.group(1) for m in _REGEX_FUNC.finditer(source_text)))
     state_models = list(dict.fromkeys(m.group(1) for m in _STATE_MODEL_RE.finditer(source_text)))
 
-    primary_symbol = (
-        classes[0]
-        if classes
-        else (functions[0] if functions else Path(rel_path).stem)
-    )
+    stem = Path(rel_path).stem
+    if stem in functions:
+        primary_symbol = stem
+    elif stem in classes:
+        primary_symbol = stem
+    elif classes and classes[0] not in state_models:
+        primary_symbol = classes[0]
+    elif functions:
+        primary_symbol = functions[0]
+    elif classes:
+        primary_symbol = classes[0]
+    else:
+        primary_symbol = stem
     symbol_type = _infer_symbol_type(source_text, primary_symbol, rel_path)
     loc = sum(1 for line in source_text.splitlines() if line.strip())
 

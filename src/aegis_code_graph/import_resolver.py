@@ -27,10 +27,11 @@ class _SymbolIndex:
         self.symbol_to_files: dict[str, list[str]] = defaultdict(list)
 
         for card in cards:
-            for cls in card.classes or ([card.primary_symbol] if card.primary_symbol else []):
-                self.symbol_to_files[cls].append(card.file_path)
+            symbols = list(dict.fromkeys(card.classes + card.functions + ([card.primary_symbol] if card.primary_symbol else [])))
+            for sym in symbols:
+                self.symbol_to_files[sym].append(card.file_path)
                 if card.package_name:
-                    self.fqn_to_file[f"{card.package_name}.{cls}"] = card.file_path
+                    self.fqn_to_file[f"{card.package_name}.{sym}"] = card.file_path
             if card.package_name:
                 self.pkg_to_files[card.package_name].append(card.file_path)
 

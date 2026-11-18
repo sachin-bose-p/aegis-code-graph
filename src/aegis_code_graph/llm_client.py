@@ -37,9 +37,11 @@ def _filter_high_signal_imports(imports: list[str]) -> list[str]:
 
 def format_context_prompt(context: RepoContext, config: GraphConfig) -> str:
     """Serialize a RepoContext into a compact prompt for architecture synthesis."""
+    app_card_count = max(3, len(context.symbol_cards) or len(context.ast_map))
+    effective_min = min(config.min_nodes, app_card_count)
     sections: list[str] = [
         f"# Repository: {context.repo_name}",
-        f"Target node count: {config.min_nodes}-{config.max_nodes} core architectural nodes.",
+        f"Target node count: {effective_min}-{config.max_nodes} core architectural nodes.",
         "",
         "## File Tree",
         context.tree_summary or "(empty)",
@@ -102,6 +104,9 @@ def _build_system_prompt(config: GraphConfig) -> str:
         "(fewer only if the repo itself has fewer components).\n"
         "2. Use REAL class/symbol names from AST Symbol Cards (e.g., ContactViewModel, "
         "ContactRepository). NEVER invent synthetic umbrella names like 'Management Screens'.\n"
+        "3. Do NOT turn `data class` DTOs, `enum class`es, or UI helper items (e.g., "
+        "Contact, TransactionStatus, DashboardCardItem) into standalone State/Domain nodes — "
+        "list them in `state_models` on their owning node instead.\n"
         "3. Group modules into logical layers using the allowed `layer` values: "
         '"ui", "state", "domain", "data", "infra", "external".\n'
         "4. Every `node.id` and `group.id` must be alphanumeric snake_case.\n"

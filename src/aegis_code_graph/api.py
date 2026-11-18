@@ -6,8 +6,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from aegis_code_graph.micro_extractor import extract_file_micro_graph
-from aegis_code_graph.models import GraphConfig, GraphResult, MicroMethodGraph
+from aegis_code_graph.micro_extractor import extract_feature_flow, extract_file_micro_graph
+from aegis_code_graph.models import FeatureFlowGraph, GraphConfig, GraphResult, MicroMethodGraph
 
 
 def get_git_head_sha(repo_path: str | Path) -> str | None:
@@ -109,6 +109,23 @@ def create_graph_router() -> Any:
     ) -> MicroMethodGraph:
         try:
             return extract_file_micro_graph(repo_path, file_path)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @router.get("/feature-flow", response_model=FeatureFlowGraph)
+    async def get_feature_flow(
+        repo_path: str = Query(...),
+        file_path: str = Query(...),
+        max_depth: int = Query(3, ge=1, le=6),
+        sarif_path: str | None = Query(None),
+    ) -> FeatureFlowGraph:
+        try:
+            return extract_feature_flow(
+                repo_path,
+                file_path,
+                max_depth=max_depth,
+                sarif_path=sarif_path,
+            )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 

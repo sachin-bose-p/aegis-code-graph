@@ -99,6 +99,25 @@ class MicroMethodGraph(BaseModel):
     internal_edges: list[GraphEdge] = Field(default_factory=list)
 
 
+class PackageDependency(BaseModel):
+    """External or SDK package imported by a feature flow."""
+
+    name: str
+    category: str = "Library"
+    used_by: list[str] = Field(default_factory=list)
+
+
+class FeatureFlowGraph(BaseModel):
+    """Focused vertical-slice drilldown for a selected screen or feature."""
+
+    entry_file: str
+    entry_symbol: str
+    packages_used: list[PackageDependency] = Field(default_factory=list)
+    entry_micro_graph: MicroMethodGraph | None = None
+    graph: ArchitectureGraph
+    react_flow: dict[str, Any] = Field(default_factory=dict)
+
+
 class GraphConfig(BaseModel):
     """Configuration for scanning, LLM synthesis, telemetry, and compilation."""
 

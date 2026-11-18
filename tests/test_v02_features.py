@@ -11,7 +11,7 @@ from aegis_code_graph.api import read_code_snippet
 from aegis_code_graph.ast_extractor import extract_symbol_card
 from aegis_code_graph.compiler import compile_mermaid, compile_react_flow
 from aegis_code_graph.import_resolver import resolve_imports
-from aegis_code_graph.micro_extractor import extract_file_micro_graph
+from aegis_code_graph.micro_extractor import extract_feature_flow, extract_file_micro_graph
 from aegis_code_graph.models import ArchitectureGraph, GraphEdge, GraphNode
 from aegis_code_graph.scanner import scan_repository
 from aegis_code_graph.models import GraphConfig
@@ -225,3 +225,42 @@ def test_compile_mermaid_renders_method_subtitles_and_rich_edges() -> None:
     mmd = compile_mermaid(graph)
     assert "ContactViewModel<br/><i>loadContacts(), deleteContact()</i>" in mmd
     assert 'vm -->|"queries getContacts()"| repo' in mmd
+
+
+def test_extract_feature_flow_traces_dependencies_and_packages(tmp_path: Path) -> None:
+    (tmp_path / "ui").mkdir()
+    (tmp_path / "data").mkdir()
+    (tmp_path / "ui" / "ContactScreen.kt").write_text(
+        """
+package com.example.ui
+import androidx.compose.material3.Text
+import com.example.data.ContactRepository
+
+@Composable
+fun ContactScreen(repo: ContactRepository) {}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "data" / "ContactRepository.kt").write_text(
+        """
+package com.example.data
+import retrofit2.Retrofit
+
+class ContactRepository(private val api: Retrofit) {
+    suspend fun fetchContacts() {}
+}
+""",
+        encoding="utf-8",
+    )
+
+    flow = extract_feature_flow(tmp_path, "ui/ContactScreen.kt")
+    assert flow.entry_symbol == "ContactScreen"
+    pkg_names = {p.name: p.category for p in flow.packages_used}
+    assert "androidx.compose.material3" in pkg_names
+    assert pkg_names["androidx.compose.material3"] == "UI / Framework"
+    assert "retrofit2.Retrofit" in pkg_names
+    assert pkg_names["retrofit2.Retrofit"] == "Networking"
+
+    node_labels = {n.label for n in flow.graph.nodes}
+    assert {"ContactScreen", "ContactRepository", "retrofit2.Retrofit"} <= node_labels
+    assert flow.react_flow["stats"]["node_count"] == len(flow.graph.nodes)
