@@ -12,6 +12,28 @@ from aegis_code_graph.models import ArchitectureGraph, GraphConfig, RepoContext
 
 _CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?```$", re.DOTALL | re.IGNORECASE)
 
+_NOISY_IMPORT_PREFIXES: tuple[str, ...] = (
+    "import java.lang.",
+    "import java.util.",
+    "import android.os.",
+    "import android.util.",
+    "import 'dart:core'",
+    "import 'package:flutter/material.dart'",
+    "import 'package:flutter/widgets.dart'",
+    "from __future__",
+    "from typing ",
+    "import typing",
+)
+
+
+def _filter_high_signal_imports(imports: list[str]) -> list[str]:
+    """Drop ubiquitous stdlib/UI-boilerplate imports to keep prompt tokens dense."""
+    return [
+        imp
+        for imp in imports
+        if not any(imp.startswith(prefix) for prefix in _NOISY_IMPORT_PREFIXES)
+    ]
+
 
 def format_context_prompt(context: RepoContext, config: GraphConfig) -> str:
     """Serialize a RepoContext into a compact prompt for architecture synthesis."""
@@ -41,8 +63,9 @@ def format_context_prompt(context: RepoContext, config: GraphConfig) -> str:
                 parts.append(f"classes=[{', '.join(sym.classes)}]")
             if sym.functions:
                 parts.append(f"funcs=[{', '.join(sym.functions)}]")
-            if sym.imports:
-                parts.append(f"imports=[{', '.join(sym.imports[:10])}]")
+            filtered_imports = _filter_high_signal_imports(sym.imports)
+            if filtered_imports:
+                parts.append(f"imports=[{', '.join(filtered_imports[:10])}]")
             sections.append(" | ".join(parts))
 
     return "\n".join(sections)
@@ -50,7 +73,7 @@ def format_context_prompt(context: RepoContext, config: GraphConfig) -> str:
 
 def _build_system_prompt(config: GraphConfig) -> str:
     """Construct the system prompt with the ArchitectureGraph JSON schema."""
-    schema_json = json.dumps(ArchitectureGraph.model_json_schema(), indent=2)
+    schema_json = json.dumps(ArchitectureGraph.model_json_schema(), separators=(",", ":"))
     return (
         "You are a principal software architect. Given a repository's file tree, "
         "manifests, entrypoints, and AST symbol/import map, synthesize a clean, "
@@ -63,8 +86,11 @@ def _build_system_prompt(config: GraphConfig) -> str:
         "3. Every `node.id` and `group.id` must be alphanumeric snake_case.\n"
         "4. Every `node.file_path` MUST be an exact relative path from the File Tree "
         '(or "" only for external services).\n'
-        "5. Every edge `source` and `target` must reference a defined `node.id`.\n"
-        "6. Respond ONLY with valid JSON matching this schema:\n"
+        "5. Do NOT place unit/integration test files (test_*, *_test.*, unittest/) "
+        "in UI/Domain/Data layers; focus on real application modules, activities, "
+        "controllers, and services.\n"
+        "6. Every edge `source` and `target` must reference a defined `node.id`.\n"
+        "7. Respond ONLY with valid JSON matching this schema:\n"
         f"{schema_json}"
     )
 
@@ -99,6 +125,7 @@ async def synthesize_architecture(
         base_url=cfg.base_url,
         api_key=cfg.api_key,
         timeout=cfg.timeout,
+        max_retries=0,
     )
 
     try:

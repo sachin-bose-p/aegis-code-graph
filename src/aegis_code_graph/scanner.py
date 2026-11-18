@@ -34,7 +34,30 @@ DEFAULT_IGNORED_DIRS: frozenset[str] = frozenset(
         ".nuxt",
         "coverage",
         "target",
+        "META-INF",
+        "smali",
+        "smali_classes2",
+        "smali_classes3",
+        "smali_classes4",
+        "smali_classes5",
+        "androidx",
     }
+)
+
+# Subpath prefixes (POSIX, lowercase) inside decompiled APKs / vendor trees to skip
+DEFAULT_IGNORED_SUBPATHS: tuple[str, ...] = (
+    "/android/support/",
+    "/com/google/android/",
+    "/com/google/gson/",
+    "/kotlin/",
+    "/kotlinx/",
+    "/okhttp3/",
+    "/retrofit2/",
+    "/res/drawable",
+    "/res/mipmap",
+    "/res/values",
+    "/res/color",
+    "/res/anim",
 )
 
 DEFAULT_IGNORED_FILES: frozenset[str] = frozenset(
@@ -143,8 +166,12 @@ def _load_gitignore_spec(root: Path) -> pathspec.PathSpec:
 
 def _is_ignored(rel_posix: str, name: str, is_dir: bool, spec: pathspec.PathSpec) -> bool:
     """Return True if a file or directory should be excluded from scanning."""
+    normalized = f"/{rel_posix.lower()}"
+    if any(sub in normalized for sub in DEFAULT_IGNORED_SUBPATHS):
+        return True
+
     if is_dir:
-        if name in DEFAULT_IGNORED_DIRS:
+        if name in DEFAULT_IGNORED_DIRS or name.startswith("smali"):
             return True
         return spec.match_file(f"{rel_posix}/") or spec.match_file(rel_posix)
 
@@ -197,12 +224,25 @@ def _read_truncated(path: Path, max_chars: int = 4000) -> str:
 
 def _prioritize_source_files(files: list[str]) -> list[str]:
     """Sort source files so core app directories and shallower files come first."""
+    test_dirs = {"test", "tests", "__tests__", "spec", "unittest", "androidtest"}
 
-    def sort_key(rel_path: str) -> tuple[int, int, str]:
-        parts = rel_path.split("/")
-        top = parts[0].lower() if parts else ""
-        in_core = 0 if top in {"lib", "src", "app", "sources", "packages"} else 1
-        is_test = 1 if any(p in {"test", "tests", "__tests__", "spec"} for p in parts) else 0
+    def sort_key(rel_path: str) -> tuple[int, int, int, str]:
+        parts = rel_path.lower().split("/")
+        name = parts[-1] if parts else ""
+        in_core = (
+            0
+            if any(p in {"lib", "src", "app", "sources", "packages", "java", "kotlin"} for p in parts[:-1])
+            else 1
+        )
+        is_test = (
+            1
+            if (
+                any(p in test_dirs for p in parts[:-1])
+                or name.startswith("test_")
+                or name.endswith(("_test.dart", "test.kt", "test.java", ".test.ts", ".test.tsx", ".spec.ts"))
+            )
+            else 0
+        )
         return (is_test, in_core, len(parts), rel_path)
 
     return sorted((f for f in files if is_supported_source(f)), key=sort_key)

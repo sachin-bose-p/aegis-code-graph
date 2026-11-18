@@ -58,14 +58,25 @@ def _resolve_file_path(raw_path: str, valid_files: set[str], sorted_files: list[
     if normalized in valid_files:
         return normalized, "exact"
 
+    # Prefer matching against files with the same extension when available
+    target_path = Path(normalized)
+    target_name = target_path.name
+    target_ext = target_path.suffix.lower()
+    candidates = (
+        [f for f in sorted_files if Path(f).suffix.lower() == target_ext]
+        if target_ext
+        else sorted_files
+    )
+    if not candidates:
+        candidates = sorted_files
+
     # Try exact basename match if unambiguous
-    target_name = Path(normalized).name
-    basename_matches = [f for f in sorted_files if Path(f).name == target_name]
+    basename_matches = [f for f in candidates if Path(f).name == target_name]
     if len(basename_matches) == 1:
         return basename_matches[0], "fuzzy"
 
-    # Fuzzy match against full relative paths
-    close = difflib.get_close_matches(normalized, sorted_files, n=1, cutoff=0.65)
+    # Fuzzy match against candidate relative paths
+    close = difflib.get_close_matches(normalized, candidates, n=1, cutoff=0.72)
     if close:
         return close[0], "fuzzy"
 

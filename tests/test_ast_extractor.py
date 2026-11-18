@@ -121,3 +121,24 @@ def test_regex_fallback_extracts_symbols() -> None:
     assert "FallbackService" in sym.classes
     assert "helper" in sym.functions
     assert "import os" in sym.imports
+
+
+def test_extract_java_symbols(tmp_path: Path) -> None:
+    java_file = tmp_path / "LoginActivity.java"
+    java_file.write_text(
+        """
+package com.example.app;
+import android.app.Activity;
+import com.example.app.data.AuthService;
+
+public class LoginActivity extends Activity {
+    public void onCreate() {}
+}
+""",
+        encoding="utf-8",
+    )
+    sym = extract_file_symbols(java_file, rel_path="sources/com/example/app/LoginActivity.java")
+    assert sym is not None
+    assert sym.language == "java"
+    assert "LoginActivity" in sym.classes
+    assert len(sym.imports) == 2

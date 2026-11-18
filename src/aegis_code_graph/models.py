@@ -53,12 +53,12 @@ class GraphConfig(BaseModel):
     base_url: str = "http://localhost:11434/v1"
     api_key: str = "ollama"
     model: str = "qwen2.5-coder:7b"
-    max_tokens_budget: int = Field(default=10000, ge=1000, le=128000)
-    ast_token_budget: int = Field(default=4000, ge=500, le=64000)
+    max_tokens_budget: int = Field(default=6000, ge=1000, le=128000)
+    ast_token_budget: int = Field(default=3000, ge=500, le=64000)
     min_nodes: int = Field(default=12, ge=1)
     max_nodes: int = Field(default=25, ge=1)
     temperature: float = Field(default=0.1, ge=0.0, le=2.0)
-    timeout: float = Field(default=120.0, gt=0.0)
+    timeout: float = Field(default=300.0, gt=0.0)
 
 
 class FileSymbols(BaseModel):

@@ -10,6 +10,7 @@ from aegis_code_graph.models import FileSymbols
 
 EXTENSION_TO_LANGUAGE: dict[str, str] = {
     ".dart": "dart",
+    ".java": "java",
     ".kt": "kotlin",
     ".kts": "kotlin",
     ".swift": "swift",

@@ -74,3 +74,27 @@ def test_scan_repository_extracts_manifests_entrypoints_and_ast(tmp_path: Path) 
 def test_scan_repository_missing_path_raises(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         scan_repository(tmp_path / "does_not_exist")
+
+
+def test_walk_repository_skips_apk_decompile_boilerplate(tmp_path: Path) -> None:
+    (tmp_path / "jadx" / "sources" / "com" / "app").mkdir(parents=True)
+    (tmp_path / "jadx" / "sources" / "com" / "app" / "MainActivity.java").write_text(
+        "class MainActivity {}", encoding="utf-8"
+    )
+    (tmp_path / "jadx" / "sources" / "androidx" / "core").mkdir(parents=True)
+    (tmp_path / "jadx" / "sources" / "androidx" / "core" / "View.java").write_text(
+        "class View {}", encoding="utf-8"
+    )
+    (tmp_path / "apktool" / "smali_classes2" / "com").mkdir(parents=True)
+    (tmp_path / "apktool" / "smali_classes2" / "com" / "Foo.smali").write_text("", encoding="utf-8")
+    (tmp_path / "apktool" / "res" / "drawable").mkdir(parents=True)
+    (tmp_path / "apktool" / "res" / "drawable" / "icon.xml").write_text("", encoding="utf-8")
+    (tmp_path / "apktool" / "res" / "layout").mkdir(parents=True)
+    (tmp_path / "apktool" / "res" / "layout" / "activity_main.xml").write_text("", encoding="utf-8")
+
+    files = walk_repository(tmp_path)
+    assert "jadx/sources/com/app/MainActivity.java" in files
+    assert "apktool/res/layout/activity_main.xml" in files
+    assert "jadx/sources/androidx/core/View.java" not in files
+    assert "apktool/smali_classes2/com/Foo.smali" not in files
+    assert "apktool/res/drawable/icon.xml" not in files

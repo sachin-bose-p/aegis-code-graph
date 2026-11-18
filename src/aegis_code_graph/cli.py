@@ -51,8 +51,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-tokens",
         type=int,
-        default=10000,
-        help="Maximum context token budget for repo scanning (default: 10000).",
+        default=6000,
+        help="Maximum context token budget for repo scanning (default: 6000).",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=300.0,
+        help="LLM request timeout in seconds (default: 300).",
     )
     parser.add_argument(
         "--scan-only",
@@ -72,6 +78,7 @@ def main(argv: list[str] | None = None) -> int:
         api_key=args.api_key,
         model=args.model,
         max_tokens_budget=args.max_tokens,
+        timeout=args.timeout,
     )
 
     if args.scan_only:
